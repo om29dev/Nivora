@@ -55,6 +55,17 @@ class TermuxEnvironmentService {
   String get shBinaryPath => p.join(binPath, 'sh');
   String get prootBinaryPath => p.join(binPath, 'proot');
 
+  static const Map<String, String> knownMirrors = {
+    'official': 'https://packages.termux.dev/apt/termux-main',
+    'grimler': 'https://grimler.se/termux/termux-main',
+    'tuna': 'https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main',
+    'bfsu': 'https://mirrors.bfsu.edu.cn/termux/apt/termux-main',
+    'leaseweb': 'https://mirror.leaseweb.com/termux/apt/termux-main',
+  };
+
+  String _activeMirror = 'https://packages.termux.dev/apt/termux-main';
+  String get activeMirror => _activeMirror;
+
   Future<void> initialize({String? customBasePath}) async {
     try {
       if (customBasePath != null) {
@@ -70,11 +81,15 @@ class TermuxEnvironmentService {
       try {
         final prefs = await SharedPreferences.getInstance();
         wasInstalled = prefs.getBool('pref_termux_installed') ?? false;
+        final savedMirror = prefs.getString('pref_termux_mirror');
+        if (savedMirror != null && savedMirror.isNotEmpty) {
+          _activeMirror = savedMirror;
+        }
       } catch (_) {}
 
       final hasBinaries = isBootstrapInstalled;
 
-      // FIX 2: Trust the filesystem. If files exist, restore the state.
+      // FIX 2: Trust the filesystem. If files exist, restore and repair the state.
       if (wasInstalled || hasBinaries) {
         _status = TermuxEnvironmentStatus.ready;
         _statusMessage = 'Termux environment ready ($_detectedArch)';
@@ -87,9 +102,8 @@ class TermuxEnvironmentService {
           } catch (_) {}
         }
 
-        if (!Platform.isWindows) {
-          await ensureBinariesExecutable(prefixPath);
-        }
+        // Auto-heal configuration, DPKG database, locks, and DNS
+        await repairEnvironment();
       } else {
         _status = TermuxEnvironmentStatus.uninstalled;
         _statusMessage = 'Termux bootstrap not installed';
@@ -120,8 +134,9 @@ class TermuxEnvironmentService {
       try {
         final result = await Process.run('uname', ['-m']);
         final machine = result.stdout.toString().trim().toLowerCase();
-        if (machine.contains('aarch64') || machine.contains('arm64'))
+        if (machine.contains('aarch64') || machine.contains('arm64')) {
           return 'aarch64';
+        }
         if (machine.contains('arm')) return 'arm';
         if (machine.contains('x86_64')) return 'x86_64';
       } catch (_) {}
@@ -250,14 +265,8 @@ class TermuxEnvironmentService {
         await processSymlinks(symlinksContent, prefixPath);
       }
 
-      if (!Platform.isWindows) {
-        await ensureBinariesExecutable(prefixPath);
-      }
-
-      // FIX 3: Patch hardcoded /data/data/com.termux paths in shell scripts
-      await _patchTermuxScripts();
-
-      await _configureAptSources();
+      // Comprehensive repair and configuration
+      await repairEnvironment();
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -279,34 +288,258 @@ class TermuxEnvironmentService {
     }
   }
 
+  /// Automatically repairs missing DPKG databases, stale locks, APT configs, DNS, and script paths.
+  Future<bool> repairEnvironment() async {
+    if (_rootPath == null) return false;
+    try {
+      // 1. Create all essential directories for DPKG and APT
+      final dirsToCreate = [
+        prefixPath,
+        binPath,
+        libPath,
+        homePath,
+        tmpPath,
+        p.join(prefixPath, 'etc'),
+        p.join(prefixPath, 'etc', 'apt'),
+        p.join(prefixPath, 'etc', 'apt', 'apt.conf.d'),
+        p.join(prefixPath, 'etc', 'apt', 'sources.list.d'),
+        p.join(prefixPath, 'etc', 'dpkg'),
+        p.join(prefixPath, 'etc', 'tls'),
+        p.join(prefixPath, 'var'),
+        p.join(prefixPath, 'var', 'lib'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'updates'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'info'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'alternatives'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'triggers'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'parts'),
+        p.join(prefixPath, 'var', 'lib', 'apt'),
+        p.join(prefixPath, 'var', 'lib', 'apt', 'lists'),
+        p.join(prefixPath, 'var', 'lib', 'apt', 'lists', 'partial'),
+        p.join(prefixPath, 'var', 'cache'),
+        p.join(prefixPath, 'var', 'cache', 'apt'),
+        p.join(prefixPath, 'var', 'cache', 'apt', 'archives'),
+        p.join(prefixPath, 'var', 'cache', 'apt', 'archives', 'partial'),
+        p.join(prefixPath, 'var', 'log'),
+        p.join(prefixPath, 'var', 'log', 'apt'),
+      ];
+
+      for (final dirPath in dirsToCreate) {
+        final d = Directory(dirPath);
+        if (!await d.exists()) {
+          await d.create(recursive: true);
+        }
+      }
+
+      // 2. Ensure critical status and available files exist
+      final dpkgStatus = File(p.join(prefixPath, 'var', 'lib', 'dpkg', 'status'));
+      if (!await dpkgStatus.exists()) {
+        await dpkgStatus.writeAsString('');
+      }
+
+      final dpkgAvailable = File(p.join(prefixPath, 'var', 'lib', 'dpkg', 'available'));
+      if (!await dpkgAvailable.exists()) {
+        await dpkgAvailable.writeAsString('');
+      }
+
+      // 3. Clear stale lock files that cause "database inaccessible" or "unable to lock"
+      final lockFiles = [
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'lock'),
+        p.join(prefixPath, 'var', 'lib', 'dpkg', 'lock-frontend'),
+        p.join(prefixPath, 'var', 'lib', 'apt', 'lists', 'lock'),
+        p.join(prefixPath, 'var', 'cache', 'apt', 'archives', 'lock'),
+      ];
+      for (final lf in lockFiles) {
+        final f = File(lf);
+        if (await f.exists()) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+
+      // 4. Configure APT paths (apt.conf and 00nivora)
+      final aptConfContent = '''
+Dir "$prefixPath";
+Dir::State "$prefixPath/var/lib/apt";
+Dir::State::status "$prefixPath/var/lib/dpkg/status";
+Dir::Cache "$prefixPath/var/cache/apt";
+Dir::Etc "$prefixPath/etc/apt";
+Dir::Bin::methods "$prefixPath/lib/apt/methods";
+Dir::Bin::dpkg "$prefixPath/bin/dpkg";
+Dir::Log "$prefixPath/var/log/apt";
+Acquire::Languages "none";
+Acquire::Retries "3";
+Acquire::http::Timeout "20";
+Acquire::https::Timeout "20";
+DPkg::Options {
+  "--admindir=$prefixPath/var/lib/dpkg";
+  "--instdir=$prefixPath";
+};
+''';
+      await File(p.join(prefixPath, 'etc', 'apt', 'apt.conf'))
+          .writeAsString(aptConfContent);
+      await File(p.join(prefixPath, 'etc', 'apt', 'apt.conf.d', '00nivora'))
+          .writeAsString(aptConfContent);
+
+      // 5. Configure DPKG (dpkg.cfg)
+      final dpkgCfgContent = '''
+admindir $prefixPath/var/lib/dpkg
+instdir $prefixPath
+''';
+      await File(p.join(prefixPath, 'etc', 'dpkg', 'dpkg.cfg'))
+          .writeAsString(dpkgCfgContent);
+
+      // 6. Configure DNS & Network resolution (resolv.conf and hosts)
+      final resolvConf = File(p.join(prefixPath, 'etc', 'resolv.conf'));
+      await resolvConf.writeAsString(
+        'nameserver 8.8.8.8\n'
+        'nameserver 1.1.1.1\n'
+        'nameserver 8.8.4.4\n',
+      );
+
+      final hostsFile = File(p.join(prefixPath, 'etc', 'hosts'));
+      if (!await hostsFile.exists()) {
+        await hostsFile.writeAsString(
+          '127.0.0.1 localhost\n'
+          '::1 localhost\n',
+        );
+      }
+
+      // 7. Ensure valid sources.list without invalid or dead mirrors
+      final sourcesList = File(p.join(prefixPath, 'etc', 'apt', 'sources.list'));
+      bool needSourcesWrite = !await sourcesList.exists();
+      if (!needSourcesWrite) {
+        final existingContent = await sourcesList.readAsString();
+        if (existingContent.contains('packages-cf.termux.dev') ||
+            existingContent.trim().isEmpty) {
+          needSourcesWrite = true;
+        }
+      }
+      if (needSourcesWrite) {
+        await sourcesList.writeAsString(
+          'deb $_activeMirror stable main\n',
+        );
+      }
+
+      // 8. Create non-interactive wrapper for termux-change-repo
+      await _installNonInteractiveChangeRepo();
+
+      // 9. Patch shell scripts & permissions
+      if (!Platform.isWindows) {
+        await _patchTermuxScripts();
+        await ensureBinariesExecutable(prefixPath);
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Switches active APT repository mirror cleanly without requiring an interactive TUI.
+  Future<bool> switchMirror(String mirrorKeyOrUrl) async {
+    final key = mirrorKeyOrUrl.trim().toLowerCase();
+    String targetUrl;
+    if (knownMirrors.containsKey(key)) {
+      targetUrl = knownMirrors[key]!;
+    } else if (mirrorKeyOrUrl.startsWith('http://') ||
+        mirrorKeyOrUrl.startsWith('https://')) {
+      targetUrl = mirrorKeyOrUrl.trim();
+    } else {
+      return false;
+    }
+
+    _activeMirror = targetUrl;
+    try {
+      final etcAptDir = Directory(p.join(prefixPath, 'etc', 'apt'));
+      if (!await etcAptDir.exists()) {
+        await etcAptDir.create(recursive: true);
+      }
+      final sourcesList = File(p.join(etcAptDir.path, 'sources.list'));
+      await sourcesList.writeAsString('deb $targetUrl stable main\n');
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('pref_termux_mirror', targetUrl);
+      } catch (_) {}
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _installNonInteractiveChangeRepo() async {
+    try {
+      final scriptFile = File(p.join(binPath, 'termux-change-repo'));
+      final content = '''#!/bin/sh
+# Nivora Non-Interactive Termux Mirror Switcher
+MIRROR="\$1"
+SOURCES="$prefixPath/etc/apt/sources.list"
+
+case "\$MIRROR" in
+  grimler)
+    URL="https://grimler.se/termux/termux-main"
+    ;;
+  tuna)
+    URL="https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main"
+    ;;
+  bfsu)
+    URL="https://mirrors.bfsu.edu.cn/termux/apt/termux-main"
+    ;;
+  leaseweb)
+    URL="https://mirror.leaseweb.com/termux/apt/termux-main"
+    ;;
+  official|main|*)
+    URL="https://packages.termux.dev/apt/termux-main"
+    ;;
+esac
+
+echo "deb \$URL stable main" > "\$SOURCES"
+echo "Active mirror set to: \$URL"
+echo "Updating package lists..."
+"$binPath/apt" update
+''';
+      await scriptFile.writeAsString(content);
+      if (!Platform.isWindows) {
+        _PosixChmod.chmod(scriptFile.path, 493);
+      }
+    } catch (_) {}
+  }
+
   // Helper method to replace hardcoded termux paths in scripts to prevent "bad interpreter"
   Future<void> _patchTermuxScripts() async {
     if (Platform.isWindows) return;
     try {
-      final binDir = Directory(binPath);
-      if (!binDir.existsSync()) return;
+      final dirsToScan = [
+        Directory(binPath),
+        Directory(p.join(prefixPath, 'etc')),
+      ];
 
-      final termuxPrefix = '/data/data/com.termux/files/usr';
+      final termuxUsrPrefix = '/data/data/com.termux/files/usr';
+      final termuxHomePrefix = '/data/data/com.termux/files/home';
 
-      for (final entity in binDir.listSync()) {
-        if (entity is File) {
-          try {
-            // Only process likely scripts to avoid corrupting large compiled binaries
-            if (entity.lengthSync() < 256 * 1024) {
-              final bytes = entity.readAsBytesSync();
-              // Check if file starts with a shebang '#!'
-              if (bytes.length > 2 && bytes[0] == 35 && bytes[1] == 33) {
-                final content = utf8.decode(bytes, allowMalformed: true);
-                if (content.contains(termuxPrefix)) {
-                  final newContent = content.replaceAll(
-                    termuxPrefix,
-                    prefixPath,
-                  );
-                  entity.writeAsStringSync(newContent);
+      for (final dir in dirsToScan) {
+        if (!dir.existsSync()) continue;
+        for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            try {
+              if (entity.lengthSync() < 256 * 1024) {
+                final bytes = entity.readAsBytesSync();
+                if (bytes.length > 2 && bytes[0] == 35 && bytes[1] == 33) {
+                  final content = utf8.decode(bytes, allowMalformed: true);
+                  if (content.contains(termuxUsrPrefix) ||
+                      content.contains(termuxHomePrefix)) {
+                    final newContent = content
+                        .replaceAll(termuxUsrPrefix, prefixPath)
+                        .replaceAll(termuxHomePrefix, homePath);
+                    entity.writeAsStringSync(newContent);
+                  }
                 }
               }
-            }
-          } catch (_) {}
+            } catch (_) {}
+          }
         }
       }
     } catch (_) {}
@@ -489,22 +722,32 @@ class TermuxEnvironmentService {
     final usrPath = rootUsrPath ?? prefixPath;
     final binDir = Directory(p.join(usrPath, 'bin'));
     final libexecDir = Directory(p.join(usrPath, 'libexec'));
+    final varDir = Directory(p.join(usrPath, 'var'));
+    final etcDir = Directory(p.join(usrPath, 'etc'));
+    final tmpDir = Directory(p.join(usrPath, 'tmp'));
 
-    _applyFfiChmodRecursive(binDir);
-    _applyFfiChmodRecursive(libexecDir);
+    _applyFfiChmodRecursive(binDir, 493);
+    _applyFfiChmodRecursive(libexecDir, 493);
+    _applyFfiChmodRecursive(varDir, 493);
+    _applyFfiChmodRecursive(etcDir, 493);
+    _applyFfiChmodRecursive(tmpDir, 511);
 
     if (Platform.isAndroid) {
       try {
-        if (await binDir.exists()) {
+        final dirs = [binDir.path, libexecDir.path, varDir.path, etcDir.path]
+            .where((p) => Directory(p).existsSync())
+            .toList();
+        if (dirs.isNotEmpty) {
+          final joinedPaths = dirs.join('" "');
           await Process.run('/system/bin/sh', [
             '-c',
-            '/system/bin/chmod -R 755 "${binDir.path}" 2>/dev/null || /system/bin/toybox chmod -R 755 "${binDir.path}" 2>/dev/null || chmod -R 755 "${binDir.path}" 2>/dev/null',
+            '/system/bin/chmod -R 755 "$joinedPaths" 2>/dev/null || /system/bin/toybox chmod -R 755 "$joinedPaths" 2>/dev/null || chmod -R 755 "$joinedPaths" 2>/dev/null',
           ]);
         }
-        if (await libexecDir.exists()) {
+        if (await tmpDir.exists()) {
           await Process.run('/system/bin/sh', [
             '-c',
-            '/system/bin/chmod -R 755 "${libexecDir.path}" 2>/dev/null || /system/bin/toybox chmod -R 755 "${libexecDir.path}" 2>/dev/null || chmod -R 755 "${libexecDir.path}" 2>/dev/null',
+            '/system/bin/chmod 777 "${tmpDir.path}" 2>/dev/null || /system/bin/toybox chmod 777 "${tmpDir.path}" 2>/dev/null',
           ]);
         }
       } catch (_) {}
@@ -516,39 +759,53 @@ class TermuxEnvironmentService {
         if (await libexecDir.exists()) {
           await Process.run('chmod', ['-R', '755', libexecDir.path]);
         }
+        if (await varDir.exists()) {
+          await Process.run('chmod', ['-R', '755', varDir.path]);
+        }
+        if (await etcDir.exists()) {
+          await Process.run('chmod', ['-R', '755', etcDir.path]);
+        }
+        if (await tmpDir.exists()) {
+          await Process.run('chmod', ['777', tmpDir.path]);
+        }
       } catch (_) {}
     }
 
     return true;
   }
 
-  void _applyFfiChmodRecursive(Directory dir) {
+  void _applyFfiChmodRecursive(Directory dir, [int mode = 493]) {
     try {
       if (!dir.existsSync()) return;
-      _PosixChmod.chmod(dir.path, 493);
+      _PosixChmod.chmod(dir.path, mode);
       for (final entity in dir.listSync(recursive: true, followLinks: false)) {
         try {
-          _PosixChmod.chmod(entity.path, 493);
+          if (entity is Directory) {
+            _PosixChmod.chmod(entity.path, mode);
+          } else {
+            _PosixChmod.chmod(entity.path, mode == 511 ? 511 : 493);
+          }
         } catch (_) {}
       }
     } catch (_) {}
   }
 
-  Future<void> _configureAptSources() async {
-    try {
-      final etcAptDir = Directory(p.join(prefixPath, 'etc', 'apt'));
-      if (!await etcAptDir.exists()) {
-        await etcAptDir.create(recursive: true);
+  String _findCaCertFile() {
+    final candidates = [
+      p.join(prefixPath, 'etc', 'tls', 'cert.pem'),
+      p.join(prefixPath, 'etc', 'ssl', 'certs', 'ca-certificates.crt'),
+      '/system/etc/security/cacerts',
+    ];
+    for (final cand in candidates) {
+      if (File(cand).existsSync() || Directory(cand).existsSync()) {
+        return cand;
       }
-      final sourcesList = File(p.join(etcAptDir.path, 'sources.list'));
-      await sourcesList.writeAsString(
-        'deb https://packages.termux.dev/apt/termux-main stable main\n'
-        'deb https://packages-cf.termux.dev/apt/termux-main stable main\n',
-      );
-    } catch (_) {}
+    }
+    return p.join(prefixPath, 'etc', 'tls', 'cert.pem');
   }
 
   Map<String, String> getEnvironmentVariables({String? workingDirectory}) {
+    final caBundle = _findCaCertFile();
     return {
       'PREFIX': prefixPath,
       'PATH': '$binPath:$binPath/applets:/system/bin:/system/xbin',
@@ -558,7 +815,15 @@ class TermuxEnvironmentService {
       'TERM': 'xterm-256color',
       'COLORTERM': 'truecolor',
       'LANG': 'en_US.UTF-8',
-      'PWD': workingDirectory ?? homePath, // FIX 4: Corrected syntax error
+      'PWD': workingDirectory ?? homePath,
+      'APT_CONFIG': p.join(prefixPath, 'etc', 'apt', 'apt.conf'),
+      'DPKG_ADMINDIR': p.join(prefixPath, 'var', 'lib', 'dpkg'),
+      'DPKG_DATADIR': p.join(prefixPath, 'share', 'dpkg'),
+      'SSL_CERT_FILE': caBundle,
+      'CURL_CA_BUNDLE': caBundle,
+      'GIT_SSL_CAINFO': caBundle,
+      'RESOLV_CONF': p.join(prefixPath, 'etc', 'resolv.conf'),
+      'PROOT_TMP_DIR': tmpPath,
     };
   }
 
@@ -581,6 +846,12 @@ class TermuxEnvironmentService {
         '/proc',
         '-b',
         '/sys',
+        '-b',
+        '$prefixPath:$prefixPath',
+        '-b',
+        '$tmpPath:/tmp',
+        '-b',
+        '${p.join(prefixPath, "etc", "resolv.conf")}:/etc/resolv.conf',
         if (workingDirectory.isNotEmpty) ...[
           '-b',
           '$workingDirectory:$workingDirectory',

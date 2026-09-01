@@ -95,15 +95,83 @@ class ProcessManager extends ChangeNotifier {
       return;
     }
 
+    // Fast path: termux-change-repo
+    if (executable == 'termux-change-repo' || executable == 'termux_change_repo') {
+      final termux = termuxService;
+      if (termux != null) {
+        if (parts.length == 1 || parts[1] == 'help' || parts[1] == '--help' || parts[1] == 'list') {
+          appendLine(TerminalLine(
+            text: '\x1B[36m[Termux Repository Mirrors]\x1B[0m\n'
+                  'Current active mirror: \x1B[32m${termux.activeMirror}\x1B[0m\n\n'
+                  'Available mirrors:\n'
+                  '  • \x1B[1mgrimler\x1B[0m  - Europe / Fast global mirror (Recommended)\n'
+                  '  • \x1B[1mofficial\x1B[0m - packages.termux.dev (Official dev mirror)\n'
+                  '  • \x1B[1mtuna\x1B[0m     - Tsinghua University (Asia)\n'
+                  '  • \x1B[1mbfsu\x1B[0m     - BFSU mirror\n'
+                  '  • \x1B[1mleaseweb\x1B[0m - Leaseweb mirror\n\n'
+                  'Usage: \x1B[33mtermux-change-repo <name>\x1B[0m (e.g. \x1B[32mtermux-change-repo grimler\x1B[0m)',
+          ));
+          return;
+        } else {
+          final target = parts[1];
+          final switched = await termux.switchMirror(target);
+          if (switched) {
+            appendLine(TerminalLine(
+              text: '\x1B[32m✔\x1B[0m Active mirror switched to: \x1B[36m${termux.activeMirror}\x1B[0m\n'
+                    'Running package list update...',
+            ));
+            await termux.repairEnvironment();
+            // Continue executing apt update with newly selected mirror
+            if (termux.isReady) {
+              await executeCommand(command: 'apt update', workingDirectory: workingDirectory);
+            }
+            return;
+          } else {
+            appendLine(TerminalLine(
+              text: '\x1B[31m✖\x1B[0m Unknown mirror: "$target". Available: grimler, official, tuna, bfsu, leaseweb, or a full https:// URL.',
+              isError: true,
+            ));
+            return;
+          }
+        }
+      }
+    }
+
+    // Fast path: pkg repair / termux-repair
+    if (trimmed == 'pkg repair' || trimmed == 'termux-repair' || trimmed == 'termux-fix') {
+      final termux = termuxService;
+      if (termux != null) {
+        appendLine(TerminalLine(text: '\x1B[36m[Termux Repair]\x1B[0m Checking environment health & repairing database...'));
+        final ok = await termux.repairEnvironment();
+        if (ok) {
+          appendLine(TerminalLine(
+            text: '\x1B[32m✔\x1B[0m Termux environment repaired:\n'
+                  '  • DPKG & APT database hierarchies verified\n'
+                  '  • Stale lock files removed\n'
+                  '  • APT path configuration (\$APT_CONFIG) updated\n'
+                  '  • DNS nameservers (8.8.8.8, 1.1.1.1) configured\n'
+                  '  • File & binary permissions refreshed (755/777)',
+          ));
+        } else {
+          appendLine(TerminalLine(text: '\x1B[31m✖\x1B[0m Failed to repair Termux environment.', isError: true));
+        }
+      }
+      return;
+    }
+
     // Fast path: pkg commands when Termux is ready
     if (executable == 'pkg' || executable == 'apt') {
-      if (Platform.isAndroid && termuxService != null && !termuxService!.isReady) {
-        appendLine(TerminalLine(
-          text: '\x1B[33m[Termux Required]\x1B[0m Embedded Termux runtime is not installed.\n'
-                'Tap \x1B[36m[ Install (~35MB) ]\x1B[0m at the top of the terminal to enable pkg/apt packages.',
-          isError: true,
-        ));
-        return;
+      if (Platform.isAndroid && termuxService != null) {
+        if (!termuxService!.isReady) {
+          appendLine(TerminalLine(
+            text: '\x1B[33m[Termux Required]\x1B[0m Embedded Termux runtime is not installed.\n'
+                  'Tap \x1B[36m[ Install (~35MB) ]\x1B[0m at the top of the terminal to enable pkg/apt packages.',
+            isError: true,
+          ));
+          return;
+        }
+        // Auto-heal locks & directories before executing pkg or apt
+        await termuxService!.repairEnvironment();
       }
     }
 
@@ -281,16 +349,18 @@ class ProcessManager extends ChangeNotifier {
 
   void _printHelp() {
     appendLine(TerminalLine(text: '\x1B[1mNivora Terminal & Termux Package Commands:\x1B[0m'));
-    appendLine(TerminalLine(text: '  \x1B[36mpkg install <pkg>\x1B[0m   - Install Termux package (e.g. nodejs, python, git, rust)'));
-    appendLine(TerminalLine(text: '  \x1B[36mpkg update\x1B[0m          - Update package repositories'));
-    appendLine(TerminalLine(text: '  \x1B[36mpkg list-all\x1B[0m        - List available packages'));
-    appendLine(TerminalLine(text: '  \x1B[36mnpm run dev\x1B[0m         - Start local development server on port 5173'));
-    appendLine(TerminalLine(text: '  \x1B[36mgit status\x1B[0m          - Show modified/staged repository files'));
-    appendLine(TerminalLine(text: '  \x1B[36mgit diff\x1B[0m            - Show unified code diffs'));
-    appendLine(TerminalLine(text: '  \x1B[36mls -la / dir\x1B[0m        - List files in current directory'));
-    appendLine(TerminalLine(text: '  \x1B[36mpwd\x1B[0m                 - Print working directory'));
-    appendLine(TerminalLine(text: '  \x1B[36mclear\x1B[0m               - Clear terminal scrollback'));
-    appendLine(TerminalLine(text: '  \x1B[31mCtrl+C\x1B[0m              - Terminate active running process'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg install <pkg>\x1B[0m        - Install Termux package (e.g. nodejs, python, git, rust)'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg update\x1B[0m               - Update package repositories'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg list-all\x1B[0m             - List available packages'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg repair\x1B[0m               - Auto-repair database, clear locks & update configs'));
+    appendLine(TerminalLine(text: '  \x1B[36mtermux-change-repo\x1B[0m       - Switch package mirror (grimler, official, tuna, bfsu)'));
+    appendLine(TerminalLine(text: '  \x1B[36mnpm run dev\x1B[0m              - Start local development server on port 5173'));
+    appendLine(TerminalLine(text: '  \x1B[36mgit status\x1B[0m               - Show modified/staged repository files'));
+    appendLine(TerminalLine(text: '  \x1B[36mgit diff\x1B[0m                 - Show unified code diffs'));
+    appendLine(TerminalLine(text: '  \x1B[36mls -la / dir\x1B[0m             - List files in current directory'));
+    appendLine(TerminalLine(text: '  \x1B[36mpwd\x1B[0m                      - Print working directory'));
+    appendLine(TerminalLine(text: '  \x1B[36mclear\x1B[0m                    - Clear terminal scrollback'));
+    appendLine(TerminalLine(text: '  \x1B[31mCtrl+C\x1B[0m                   - Terminate active running process'));
   }
 
   void sendInput(String input) {

@@ -50,6 +50,52 @@ void main() {
       expect(env['TMPDIR'], equals(service.tmpPath));
       expect(env['TERM'], equals('xterm-256color'));
       expect(env['PWD'], equals('/test/workspace'));
+      expect(env['APT_CONFIG'], equals(p.join(service.prefixPath, 'etc', 'apt', 'apt.conf')));
+      expect(env['DPKG_ADMINDIR'], equals(p.join(service.prefixPath, 'var', 'lib', 'dpkg')));
+      expect(env['RESOLV_CONF'], equals(p.join(service.prefixPath, 'etc', 'resolv.conf')));
+      expect(env['SSL_CERT_FILE'], isNotEmpty);
+    });
+
+    test('repairEnvironment initializes DPKG status, APT configs, DNS and clears locks', () async {
+      // Create a dummy stale lock file
+      final dpkgDir = Directory(p.join(service.prefixPath, 'var', 'lib', 'dpkg'));
+      await dpkgDir.create(recursive: true);
+      final lockFile = File(p.join(dpkgDir.path, 'lock-frontend'));
+      await lockFile.writeAsString('stale-lock');
+      expect(await lockFile.exists(), isTrue);
+
+      final ok = await service.repairEnvironment();
+      expect(ok, isTrue);
+
+      // Verify lock was cleared
+      expect(await lockFile.exists(), isFalse);
+
+      // Verify dpkg status and available exist
+      final statusFile = File(p.join(dpkgDir.path, 'status'));
+      expect(await statusFile.exists(), isTrue);
+
+      // Verify apt.conf exists and configures correct prefix
+      final aptConf = File(p.join(service.prefixPath, 'etc', 'apt', 'apt.conf'));
+      expect(await aptConf.exists(), isTrue);
+      final aptContent = await aptConf.readAsString();
+      expect(aptContent, contains(service.prefixPath));
+      expect(aptContent, contains('Dir::State::status'));
+
+      // Verify resolv.conf exists
+      final resolvConf = File(p.join(service.prefixPath, 'etc', 'resolv.conf'));
+      expect(await resolvConf.exists(), isTrue);
+      expect(await resolvConf.readAsString(), contains('8.8.8.8'));
+    });
+
+    test('switchMirror updates sources.list with reliable mirrors', () async {
+      final success = await service.switchMirror('grimler');
+      expect(success, isTrue);
+      expect(service.activeMirror, equals('https://grimler.se/termux/termux-main'));
+
+      final sources = File(p.join(service.prefixPath, 'etc', 'apt', 'sources.list'));
+      expect(await sources.exists(), isTrue);
+      final content = await sources.readAsString();
+      expect(content, contains('https://grimler.se/termux/termux-main'));
     });
 
     test('Parses SYMLINKS.txt format correctly', () async {
