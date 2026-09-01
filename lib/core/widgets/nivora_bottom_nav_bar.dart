@@ -73,12 +73,20 @@ class NivoraBottomNavBar extends StatelessWidget {
                 onTap: () => onItemSelected(2),
               ),
 
-              // Right Tab 3: More
+              // Right Tab 3: Semantic Intel
+              _NavItem(
+                label: 'Intel',
+                icon: Icons.hub_rounded,
+                isSelected: currentIndex == 3,
+                onTap: () => onItemSelected(3),
+              ),
+
+              // Right Tab 4: More
               _NavItem(
                 label: 'More',
                 icon: Icons.more_horiz_rounded,
-                isSelected: currentIndex == 3,
-                onTap: () => onItemSelected(3),
+                isSelected: currentIndex == 4,
+                onTap: () => onItemSelected(4),
               ),
             ],
           ),
@@ -118,8 +126,8 @@ class _NavItem extends StatelessWidget {
           splashColor: AppColors.electricCyan.withAlpha(25),
           highlightColor: Colors.transparent,
           child: Container(
-            constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,

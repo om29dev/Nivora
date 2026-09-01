@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import '../features/ai_assistant/ai_assistant_screen.dart';
+import '../features/semantic_intel/semantic_dashboard_screen.dart';
 import '../features/ai_setup/ai_setup_screen.dart';
 import '../features/camera_debug/camera_debug_screen.dart';
 import '../features/clone/clone_screen.dart';
@@ -80,7 +81,17 @@ final appRouter = GoRouter(
           ],
         ),
 
-        // Tab 3: More (Secondary Tools & Settings Hub)
+        // Tab 3: Semantic Intel (Blast Radius Analyzer)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/semantic-intel',
+              builder: (context, state) => const SemanticDashboardScreen(),
+            ),
+          ],
+        ),
+
+        // Tab 4: More (Secondary Tools & Settings Hub)
         StatefulShellBranch(
           routes: [
             GoRoute(
