@@ -40,14 +40,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
 
-    final onboardingVal = ref.read(onboardingCompletedProvider);
-    final isCompleted = onboardingVal.value ?? false;
+    // Ensure onboarding is marked completed so relaunch never prompts again
+    try {
+      ref.read(onboardingCompletedProvider.notifier).completeOnboarding();
+    } catch (_) {}
 
-    if (isCompleted) {
-      context.go('/home');
-    } else {
-      context.go('/onboarding');
-    }
+    // Always navigate directly to Dashboard
+    context.go('/home');
   }
 
   @override

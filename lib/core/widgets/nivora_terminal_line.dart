@@ -21,7 +21,7 @@ class NivoraTerminalLineWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '❯ ',
+              '> ',
               style: AppTypography.terminal.copyWith(
                 color: AppColors.electricCyan,
                 fontWeight: FontWeight.bold,
@@ -42,11 +42,14 @@ class NivoraTerminalLineWidget extends StatelessWidget {
     }
 
     if (line.isError) {
+      final errorSpans = AnsiParser.parseToSpans(line.text, defaultColor: AppColors.coralRed);
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1),
-        child: Text(
-          line.text,
-          style: AppTypography.terminal.copyWith(color: AppColors.coralRed),
+        padding: const EdgeInsets.symmetric(vertical: 0.5),
+        child: RichText(
+          text: TextSpan(
+            style: AppTypography.terminal.copyWith(color: AppColors.coralRed),
+            children: errorSpans,
+          ),
         ),
       );
     }

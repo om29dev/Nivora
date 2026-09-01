@@ -7,18 +7,23 @@ import '../features/editor/editor_screen.dart';
 import '../features/file_explorer/file_explorer_screen.dart';
 import '../features/git/git_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/more/more_screen.dart';
 import '../features/office_kit/office_kit_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/project_overview/project_overview_screen.dart';
+import '../features/projects/projects_screen.dart';
 import '../features/runner_preview/runner_preview_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/splash/splash_screen.dart';
+import '../features/terminal/global_terminal_screen.dart';
 import '../features/terminal/terminal_screen.dart';
 import '../features/voice/voice_coding_modal.dart';
+import 'nivora_nav_shell.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
+    // Pre-navigation onboarding routes
     GoRoute(
       path: '/',
       builder: (context, state) => const SplashScreen(),
@@ -32,16 +37,62 @@ final appRouter = GoRouter(
       builder: (context, state) => const AISetupScreen(),
     ),
     GoRoute(
-      path: '/home',
-      builder: (context, state) => const HomeScreen(),
-    ),
-    GoRoute(
       path: '/clone',
       builder: (context, state) {
         final initialUrl = state.extra as String? ?? '';
         return CloneScreen(initialUrl: initialUrl);
       },
     ),
+
+    // Global Bottom Navigation Shell (StatefulShellRoute)
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
+        return NivoraNavShell(navigationShell: navigationShell);
+      },
+      branches: [
+        // Tab 0: Dashboard (Home)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/home',
+              builder: (context, state) => const HomeScreen(),
+            ),
+          ],
+        ),
+
+        // Tab 1: Projects (Repository Explorer)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/projects',
+              builder: (context, state) => const ProjectsScreen(),
+            ),
+          ],
+        ),
+
+        // Tab 2: Terminal (Global Workstation Console)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/terminal',
+              builder: (context, state) => const GlobalTerminalScreen(),
+            ),
+          ],
+        ),
+
+        // Tab 3: More (Secondary Tools & Settings Hub)
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/more',
+              builder: (context, state) => const MoreScreen(),
+            ),
+          ],
+        ),
+      ],
+    ),
+
+    // Project Workspace Deep Routes
     GoRoute(
       path: '/project/:id',
       builder: (context, state) {
@@ -94,6 +145,8 @@ final appRouter = GoRouter(
         ),
       ],
     ),
+
+    // Standalone Auxiliary Tool Routes
     GoRoute(
       path: '/camera-debug',
       builder: (context, state) => const CameraDebugScreen(),

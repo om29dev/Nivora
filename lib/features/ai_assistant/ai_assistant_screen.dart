@@ -540,37 +540,41 @@ class _AIAssistantScreenState extends ConsumerState<AIAssistantScreen> {
           ),
 
           // Input Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardTheme.color ?? AppColors.surface(context),
-              border: Border(
-                top: BorderSide(
-                  color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+          SafeArea(
+            top: false,
+            bottom: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardTheme.color ?? AppColors.surface(context),
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: NivoraInput(
-                    controller: _promptController,
-                    focusNode: _promptFocusNode,
-                    hintText: 'Ask agent to build, refactor, or test...',
-                    prefixIcon: Icons.auto_awesome,
-                    onSubmitted: (val) => _submitPrompt(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: NivoraInput(
+                      controller: _promptController,
+                      focusNode: _promptFocusNode,
+                      hintText: 'Ask agent to build, refactor, or test...',
+                      prefixIcon: Icons.auto_awesome,
+                      onSubmitted: (val) => _submitPrompt(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.electricCyan,
-                    foregroundColor: Colors.white,
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    icon: const Icon(Icons.arrow_upward_rounded, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.electricCyan,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _isBusy ? null : () => _submitPrompt(),
                   ),
-                  onPressed: _isBusy ? null : () => _submitPrompt(),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

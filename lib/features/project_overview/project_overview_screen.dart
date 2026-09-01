@@ -49,34 +49,38 @@ class ProjectOverviewScreen extends ConsumerWidget {
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color,
-          border: Border(
-            top: BorderSide(
-              color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        bottom: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+              ),
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: NivoraButton(
-                text: 'Ask AI',
-                icon: Icons.auto_awesome,
-                onPressed: () => context.push('/project/$projectId/ai'),
+          child: Row(
+            children: [
+              Expanded(
+                child: NivoraButton(
+                  text: 'Ask AI',
+                  icon: Icons.auto_awesome,
+                  onPressed: () => context.push('/project/$projectId/ai'),
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: NivoraSecondaryButton(
-                text: 'Run Project',
-                icon: Icons.play_arrow_rounded,
-                onPressed: () => context.push('/project/$projectId/run'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: NivoraSecondaryButton(
+                  text: 'Run Project',
+                  icon: Icons.play_arrow_rounded,
+                  onPressed: () => context.push('/project/$projectId/run'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       body: ListView(

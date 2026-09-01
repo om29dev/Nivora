@@ -62,6 +62,8 @@ All UI interfaces adhere to standardized semantic components:
 - `NivoraDiffViewer`: Scroll-protected unified diff viewer with addition (green) and deletion (red) lines.
 - `NivoraEmptyState`: High-context empty state with clear call to action.
 - `NivoraErrorState`: Diagnostic card explaining error, cause, and "Fix with AI" CTA.
+- `NivoraBottomNavBar`: Floating pill-shaped navigation bar (26dp radius, 1px border) with 4 symmetrical destinations.
+- `NivoraFloatingAIButton`: 66dp circular AI Agent floating button rising 22dp above the navigation bar with glowing concentric halo ring.
 
 ---
 

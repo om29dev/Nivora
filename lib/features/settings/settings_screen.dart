@@ -19,9 +19,7 @@ class SettingsScreen extends ConsumerWidget {
     final healthAsync = ref.watch(runtimeHealthProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Global Settings'),
-      ),
+      appBar: AppBar(title: const Text('Global Settings')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -37,7 +35,9 @@ class SettingsScreen extends ConsumerWidget {
                     Text('Active Provider', style: AppTypography.h3),
                     NivoraChip(
                       label: activeAI.isLocal ? 'ON-DEVICE' : 'EXTERNAL',
-                      color: activeAI.isLocal ? AppColors.emeraldGreen : AppColors.violetAccent,
+                      color: activeAI.isLocal
+                          ? AppColors.emeraldGreen
+                          : AppColors.violetAccent,
                     ),
                   ],
                 ),
@@ -54,11 +54,87 @@ class SettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
+          // Embedded Termux Section
+          _SectionHeader(title: 'EMBEDDED TERMUX RUNTIME'),
+          NivoraCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Termux Package Environment',
+                        style: AppTypography.h3Of(context),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    NivoraChip(
+                      label: ref.watch(termuxEnvironmentServiceProvider).isReady
+                          ? 'READY (${ref.watch(termuxEnvironmentServiceProvider).detectedArchitecture})'
+                          : 'NOT INSTALLED',
+                      color: ref.watch(termuxEnvironmentServiceProvider).isReady
+                          ? AppColors.emeraldGreen
+                          : AppColors.amberWarning,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Self-contained Linux runtime running inside Nivora without requiring the Termux app.',
+                  style: AppTypography.captionOf(context),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Prefix: ${ref.watch(termuxEnvironmentServiceProvider).prefixPath}',
+                        style: AppTypography.terminal.copyWith(
+                          fontSize: 10,
+                          color: AppColors.textMuted,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.electricCyan,
+                        foregroundColor: AppColors.darkBackground,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onPressed: () {
+                        context.push('/project/demo-react-vite/terminal');
+                      },
+                      child: Text(
+                        ref.watch(termuxEnvironmentServiceProvider).isReady
+                            ? 'Open in Terminal'
+                            : 'Install Runtime',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Toolchain Diagnostics Section
           _SectionHeader(title: 'RUNTIME TOOLCHAINS & ENVIRONMENT'),
           NivoraCard(
             child: healthAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator(color: AppColors.electricCyan)),
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppColors.electricCyan),
+              ),
               error: (err, _) => Text('Error probing toolchains: $err'),
               data: (health) {
                 return Column(
@@ -87,15 +163,30 @@ class SettingsScreen extends ConsumerWidget {
           NivoraCard(
             child: Column(
               children: const [
-                _PermissionToggle(title: 'Read project files & documentation', initialValue: true),
+                _PermissionToggle(
+                  title: 'Read project files & documentation',
+                  initialValue: true,
+                ),
                 Divider(),
-                _PermissionToggle(title: 'Targeted symbol indexing', initialValue: true),
+                _PermissionToggle(
+                  title: 'Targeted symbol indexing',
+                  initialValue: true,
+                ),
                 Divider(),
-                _PermissionToggle(title: 'Synthesize code modifications', initialValue: true),
+                _PermissionToggle(
+                  title: 'Synthesize code modifications',
+                  initialValue: true,
+                ),
                 Divider(),
-                _PermissionToggle(title: 'Require confirmation for destructive commands', initialValue: true),
+                _PermissionToggle(
+                  title: 'Require confirmation for destructive commands',
+                  initialValue: true,
+                ),
                 Divider(),
-                _PermissionToggle(title: 'Automatic Git Push', initialValue: false),
+                _PermissionToggle(
+                  title: 'Automatic Git Push',
+                  initialValue: false,
+                ),
               ],
             ),
           ),
@@ -105,44 +196,48 @@ class SettingsScreen extends ConsumerWidget {
           // Appearance & Theme Mode Section
           _SectionHeader(title: 'APPEARANCE & THEME'),
           NivoraCard(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Application Theme', style: AppTypography.h3Of(context)),
-                    const SizedBox(height: 2),
-                    Text(
-                      ref.watch(themeModeProvider) == ThemeMode.dark
-                          ? 'Dark Mode (Default)'
-                          : 'Light Mode',
-                      style: AppTypography.captionOf(context),
-                    ),
-                  ],
-                ),
+                Text('Application Theme', style: AppTypography.h3Of(context)),
+                const SizedBox(height: 2),
+                Text(switch (ref.watch(themeModeProvider)) {
+                  ThemeMode.dark => 'Dark Mode (Default)',
+                  ThemeMode.light => 'Light Mode',
+                  ThemeMode.system => 'Following System',
+                }, style: AppTypography.captionOf(context)),
+                const SizedBox(height: 14),
                 SegmentedButton<ThemeMode>(
                   segments: const [
                     ButtonSegment(
-                      value: ThemeMode.dark,
-                      icon: Icon(Icons.dark_mode_outlined, size: 16),
-                      label: Text('Dark'),
+                      value: ThemeMode.system,
+                      icon: Icon(Icons.auto_mode, size: 16),
+                      label: Text('Auto'),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
-                      icon: Icon(Icons.light_mode_outlined, size: 16),
+                      icon: Icon(Icons.light_mode, size: 16),
                       label: Text('Light'),
+                    ),
+                    ButtonSegment(
+                      value: ThemeMode.dark,
+                      icon: Icon(Icons.dark_mode, size: 16),
+                      label: Text('Dark'),
                     ),
                   ],
                   selected: {ref.watch(themeModeProvider)},
                   onSelectionChanged: (val) {
                     ref.read(themeModeProvider.notifier).setTheme(val.first);
                   },
+                  showSelectedIcon: false,
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ],
             ),
           ),
-
           const SizedBox(height: 24),
 
           // Demo Data & Hackathon Sandbox Section
@@ -151,7 +246,10 @@ class SettingsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Pre-seeded Repositories', style: AppTypography.h3Of(context)),
+                Text(
+                  'Pre-seeded Repositories',
+                  style: AppTypography.h3Of(context),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   'Instantly generate realistic React & Python projects for offline evaluation.',
@@ -166,11 +264,15 @@ class SettingsScreen extends ConsumerWidget {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
-                    await ref.read(projectsListProvider.notifier).seedDemoProjects();
+                    await ref
+                        .read(projectsListProvider.notifier)
+                        .seedDemoProjects();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Demo repositories re-seeded successfully!'),
+                          content: Text(
+                            'Demo repositories re-seeded successfully!',
+                          ),
                           backgroundColor: AppColors.emeraldGreen,
                         ),
                       );
@@ -243,10 +345,17 @@ class _ToolchainRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(info.name, style: AppTypography.bodyOf(context).copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                info.name,
+                style: AppTypography.bodyOf(
+                  context,
+                ).copyWith(fontWeight: FontWeight.w600),
+              ),
               Text(
                 info.version ?? 'Not found',
-                style: AppTypography.captionOf(context).copyWith(fontFamily: 'JetBrainsMono', fontSize: 11),
+                style: AppTypography.captionOf(
+                  context,
+                ).copyWith(fontFamily: 'JetBrainsMono', fontSize: 11),
               ),
             ],
           ),
@@ -264,10 +373,7 @@ class _PermissionToggle extends StatefulWidget {
   final String title;
   final bool initialValue;
 
-  const _PermissionToggle({
-    required this.title,
-    required this.initialValue,
-  });
+  const _PermissionToggle({required this.title, required this.initialValue});
 
   @override
   State<_PermissionToggle> createState() => _PermissionToggleState();
@@ -307,9 +413,13 @@ class _PermissionToggleState extends State<_PermissionToggle> {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${widget.title}: ${val ? "Enabled" : "Disabled"}'),
+                  content: Text(
+                    '${widget.title}: ${val ? "Enabled" : "Disabled"}',
+                  ),
                   duration: const Duration(seconds: 1),
-                  backgroundColor: val ? AppColors.emeraldGreen : AppColors.amberWarning,
+                  backgroundColor: val
+                      ? AppColors.emeraldGreen
+                      : AppColors.amberWarning,
                 ),
               );
             },

@@ -15,7 +15,13 @@
 ## 3. Core Subsystems & Runtime Engine
 - [x] Build `RepositoryScanner`, `ProjectDetector`, `MarkdownAnalyzer`, `SymbolIndexer`, and `ContextRetriever`.
 - [x] Build `LocalDevServer` HTTP daemon bound to `InternetAddress.loopbackIPv4` on port `5173`.
-- [x] Build `ProcessManager` with Workstation Shell Engine routing for developer commands (`npm`, `node`, `vite`, `git`, `python`).
+- [x] Build `ProcessManager` with genuine real process execution engine (replacing all mocked responses).
+- [x] Build `TermuxEnvironmentService` providing self-contained embedded Termux runtime without requiring the standalone Termux app:
+  - Architecture detection (`aarch64`, `arm`, `x86_64`).
+  - Bootstrap download & extraction from official Termux releases.
+  - `SYMLINKS.txt` parsing and permissions setup.
+  - User-space PRoot path mapping (`/data/data/com.termux/files/usr`).
+  - Support for `pkg install` / `apt install` (nodejs, python, git, etc.).
 - [x] Build `GitService` (clone, status, diff, add, commit, branch, push, pull).
 - [x] Build `AIAgentEngine` with `ToolRegistry` and `PatchEngine`.
 - [x] Build `OfficeKitService` and `StorageService`.
@@ -35,14 +41,22 @@
   - [x] New chat creation button.
   - [x] User message editing and re-prompting.
   - [x] Bounded diff review sheet with **Keep & Apply** and **Discard** actions.
-- [x] Terminal view with streaming scrollback and port detection (`/project/:id/terminal`).
+- [x] Global Bottom Navigation System (`NivoraNavShell`, `NivoraBottomNavBar`):
+  - [x] Tab 0: Dashboard (`/home`) with greeting, GitHub URL cloner, and recent projects.
+  - [x] Tab 1: Dedicated Projects Explorer (`/projects`) with live search filter and repository cards.
+  - [x] Tab 2: Workstation Terminal (`/terminal`) connecting to real process streams & Termux runtime.
+  - [x] Tab 3: More Tools Hub (`/more`) for Runner, Git, Camera, Voice, Office Kit, and Settings.
+  - [x] Overlapping Center Floating AI Button (`NivoraFloatingAIButton`) rising 22dp with tactile glow.
+  - [x] GoRouter `StatefulShellRoute.indexedStack` preserving state across all tabs.
 - [x] Runner & Live Preview with Chrome launch fallback (`/project/:id/run`).
 - [x] Git Source Control (`/project/:id/git`).
 - [x] Voice Coding modal (`/voice-coding`).
 - [x] Office Kit wireless companion screen (`/office-kit`).
-- [x] Settings screen (`/settings`) with working interactive permission toggles.
+- [x] Settings screen (`/settings`) with embedded Termux management card and permission toggles.
 
 ## 5. Verification & Quality
-- [x] Run `dart analyze lib` — 0 issues found.
-- [x] Run `flutter test` — all unit & widget tests passing (8/8).
+- [x] Run `flutter analyze` — 0 issues found.
+- [x] Run `flutter test` — all 18 unit & widget tests passing (18/18).
+- [x] Unit tests for navigation & AI button (`test/unit/navigation_test.dart`).
+- [x] Unit tests for TermuxEnvironmentService (`test/unit/termux_service_test.dart`).
 - [x] End-to-end verified on physical Android device.

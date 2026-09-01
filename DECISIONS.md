@@ -67,3 +67,23 @@
 - **Decision:** Separate repository-level scans (triggered via "Ask AI" in project overview) from file-level feeding (triggered via the in-editor scanner button into the active continued chat session). Added multi-session history, prompt editing, and bounded Keep / Discard diff review.
 - **Alternatives Considered:** Ephemeral single-turn modals with no chat memory.
 - **Consequences:** Natural pair-programming workflow where file context flows directly into conversation memory without losing previous exchanges.
+
+---
+
+## ADR 008: Embedded Termux Runtime Without Standalone Termux App
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** Users require real Linux developer toolchains (`pkg`, `apt`, `nodejs`, `python`, `git`, `bash`) on mobile without forcing the installation of the standalone Termux application or requiring root permissions.
+- **Decision:** Embed a self-contained Termux runtime management engine (`TermuxEnvironmentService`) that downloads architecture-matched official Termux bootstraps into Nivora's sandbox, parses `SYMLINKS.txt`, sets executable bits, and uses user-space PRoot path mapping (`-b <prefix>:/data/data/com.termux/files/usr`). Dispatches real processes on desktop environments.
+- **Alternatives Considered:** Requiring external Termux app via Android intents (breaks seamless UX, poor integration), mocking command outputs (violates rule 5, non-functional tools).
+- **Consequences:** The terminal inside Nivora functions like Termux, installs and executes genuine Termux packages, works out-of-the-box offline or on-demand, and keeps code execution isolated in the app sandbox.
+
+---
+
+## ADR 009: Global Bottom Navigation with Floating Center AI Button
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** Mobile developers need quick, thumb-ergonomic switching between Dashboard, Repositories, Terminal, and auxiliary tools, with the AI Agent acting as the primary elevated centerpiece rather than a generic fifth tab.
+- **Decision:** Implement a floating pill navigation container (`NivoraBottomNavBar`) using GoRouter `StatefulShellRoute.indexedStack` with 4 symmetrical destinations (`Dashboard`, `Projects`, `Terminal`, `More`), and a 66dp circular AI floating button (`NivoraFloatingAIButton`) rising 22dp above the bar edge with concentric halo glow and tactile spring animation.
+- **Alternatives Considered:** Standard Material BottomNavigationBar (lacks luxury floating pill styling, cannot overlap center action), generic fifth navigation tab for AI (diminishes AI prominence as the primary development agent).
+- **Consequences:** Instant tab switching with zero state loss for terminal streams or project context; prominent, elegant visual hierarchy where AI is the core companion.

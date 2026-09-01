@@ -15,12 +15,17 @@ Nivora runs a dedicated, in-app HTTP server daemon directly on the physical Andr
 
 ---
 
-## 2. Workstation Shell Engine & Command Routing
-Android's default `/system/bin/sh` lacks developer toolchains (`npm`, `node`, `git`, `python`, `vite`), normally causing exit code `127: inaccessible or not found` errors.
+## 2. Embedded Termux Runtime & Real Process Execution
+Android's default `/system/bin/sh` lacks developer toolchains (`npm`, `node`, `git`, `python`, `vite`), returning exit code `127: inaccessible or not found` errors.
 
-To solve this, Nivora features a dual-layer command router:
-1. **Developer Toolchain Routing:** Commands matching `npm`, `npx`, `node`, `vite`, `git`, `python`, `python3`, `pip`, `ls`, `pwd`, `cat` are intercepted by Nivora's Workstation Shell Engine and executed with genuine runtime emulations and live file system operations.
-2. **Native Android Fallback:** Pure shell utilities are dispatched to `/system/bin/sh` or terminal PTY bridges when native binaries exist.
+To solve this **without requiring the standalone Termux application to be installed**, Nivora embeds its own self-contained Termux runtime:
+1. **Self-Contained Bootstrap:** Downloads and extracts official Termux bootstrap archives (`bootstrap-aarch64.zip`, `bootstrap-arm.zip`, `bootstrap-x86_64.zip`) directly into Nivora's private data sandbox (`<app_data>/termux/usr`).
+2. **Reconstruction & Permissions:** Recreates symbolic links from `SYMLINKS.txt` and applies `chmod 755` executable permissions to binaries.
+3. **Environment & PRoot Mapping:**
+   - Prepares full POSIX environment (`$PREFIX`, `$PATH`, `$LD_LIBRARY_PATH`, `$HOME`, `$TMPDIR`).
+   - Uses user-space PRoot mapping (`-b <localUsr>:/data/data/com.termux/files/usr`) to eliminate path collisions with Termux packages.
+4. **Real Termux Package Management:** Connects to official Termux repositories (`packages.termux.dev`), allowing users to run `pkg install nodejs`, `pkg install python`, `pkg install git`, and `apt update` directly inside Nivora.
+5. **Desktop Workstation Mode:** When running on Windows, macOS, or Linux, real system shells (`powershell.exe`, `/bin/sh`) are executed directly.
 
 ```text
 User Terminal Input / "Run Project"
@@ -29,10 +34,11 @@ User Terminal Input / "Run Project"
         ProcessManager.start()
                 │
     ┌───────────┴───────────┐
-    │ Developer Command?    │
+    │ Platform Check        │
     ├───────────────────────┤
-    │ YES: Workstation Shell│ ──► [Starts LocalDevServer:5173 / Streams logs]
-    │ NO:  /system/bin/sh   │ ──► [Dispatches to Android native process]
+    │ Android + Termux Ready│ ──► [Runs embedded Termux bash with $PREFIX/bin & $LD_LIBRARY_PATH]
+    │ Android (Uninstalled) │ ──► [/system/bin/sh for basic tools or prompts Termux installation]
+    │ Desktop (Win/Mac/Lin) │ ──► [Dispatches to host powershell / /bin/sh real system processes]
     └───────────────────────┘
 ```
 
@@ -48,5 +54,5 @@ User Terminal Input / "Run Project"
 
 ## 4. Sandboxing & Security Rules
 - Each project runs strictly isolated within its active directory (`Nivora/projects/<repo_name>/`).
-- Path traversal (`../`) attempting to reach private app directories (`/data/data/com.nivora.app/databases`) or external storage without permissions is blocked.
+- Path traversal (`../`) attempting to reach private app directories or external storage without permissions is blocked.
 - Environment variables (`.env`, secrets) are protected from external prompt leakage.

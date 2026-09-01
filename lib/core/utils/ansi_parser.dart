@@ -4,18 +4,30 @@ import '../../app/theme/app_colors.dart';
 class AnsiParser {
   AnsiParser._();
 
-  static List<TextSpan> parseToSpans(String text) {
+  static final RegExp _ansiRegex = RegExp(r'\x1B\[([0-9;]*)m');
+
+  static String stripAnsi(String text) {
+    return text.replaceAll(_ansiRegex, '');
+  }
+
+  static List<TextSpan> parseToSpans(String text, {Color? defaultColor}) {
+    final baseColor = defaultColor ?? AppColors.textCode;
+
     if (!text.contains('\x1B[')) {
-      return [TextSpan(text: text)];
+      return [
+        TextSpan(
+          text: text,
+          style: TextStyle(color: baseColor),
+        )
+      ];
     }
 
     final spans = <TextSpan>[];
-    final regex = RegExp(r'\x1B\[([0-9;]*)m');
     int lastMatchEnd = 0;
-    Color currentColor = AppColors.textCode;
+    Color currentColor = baseColor;
     FontWeight currentWeight = FontWeight.normal;
 
-    for (final match in regex.allMatches(text)) {
+    for (final match in _ansiRegex.allMatches(text)) {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(
           text: text.substring(lastMatchEnd, match.start),
@@ -29,7 +41,7 @@ class AnsiParser {
       for (final c in codes) {
         switch (c) {
           case 0:
-            currentColor = AppColors.textCode;
+            currentColor = baseColor;
             currentWeight = FontWeight.normal;
             break;
           case 1:

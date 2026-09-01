@@ -2,11 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../models/terminal_types.dart';
 import 'local_dev_server.dart';
+import 'termux_environment_service.dart';
 
-class ProcessManager {
+class ProcessManager extends ChangeNotifier {
+  final TermuxEnvironmentService? termuxService;
+
+  ProcessManager({this.termuxService});
+
   Process? _activeProcess;
   RunningProcessInfo? _activeProcessInfo;
   Timer? _serverHeartbeat;
@@ -18,7 +24,7 @@ class ProcessManager {
   Stream<TerminalLine> get outputStream => _outputController.stream;
   List<TerminalLine> get currentBuffer => List.unmodifiable(_buffer);
   RunningProcessInfo? get activeProcessInfo => _activeProcessInfo;
-  bool get isProcessRunning => _activeProcess != null || _activeProcessInfo != null;
+  bool get isProcessRunning => _activeProcess != null || _activeProcessInfo != null || _devServer.isRunning;
 
   void appendLine(TerminalLine line) {
     if (_buffer.length >= maxBufferLines) {
@@ -26,6 +32,7 @@ class ProcessManager {
     }
     _buffer.add(line);
     _outputController.add(line);
+    notifyListeners();
   }
 
   void clearBuffer() {
@@ -33,6 +40,20 @@ class ProcessManager {
     final clearedLine = TerminalLine(text: 'Terminal buffer cleared.');
     _buffer.add(clearedLine);
     _outputController.add(clearedLine);
+    notifyListeners();
+  }
+
+  /// Explicitly starts the local dev server on loopback port (default 5173).
+  Future<int> startDevServer({
+    required String workingDirectory,
+    String? command,
+    int requestedPort = 5173,
+  }) async {
+    killActiveProcess();
+    final cmd = command ?? 'npm run dev';
+    await _startBuiltinDevServer(cmd, workingDirectory, requestedPort: requestedPort);
+    notifyListeners();
+    return _activeProcessInfo?.localPort ?? requestedPort;
   }
 
   Future<void> executeCommand({
@@ -58,30 +79,94 @@ class ProcessManager {
       return;
     }
 
-    // Workstation commands that must always be handled by the Workstation Engine
-    final lowerCmd = trimmed.toLowerCase();
-    final parts = trimmed.split(RegExp(r'\s+'));
-    final executable = parts[0].toLowerCase();
-
-    final isWorkstationCommand = [
-      'npm', 'npx', 'git', 'node', 'vite', 'python', 'python3', 'pip', 'uvicorn',
-      'ls', 'dir', 'cat', 'pwd', 'clear', 'cls', 'help'
-    ].contains(executable) || lowerCmd.startsWith('npm ') || lowerCmd.startsWith('git ');
-
-    if (Platform.isAndroid || isWorkstationCommand) {
-      await _runWorkstationShell(trimmed, workingDirectory);
+    // Fast path: help
+    if (trimmed == 'help' || trimmed == '--help') {
+      _printHelp();
       return;
     }
 
-    // Try real native OS execution for host desktop / custom binaries
+    final lowerCmd = trimmed.toLowerCase();
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final executable = parts.first;
+
+    // Fast path: Dev server commands automatically trigger loopback server
+    if (lowerCmd.contains('npm run dev') || lowerCmd.contains('vite') || lowerCmd.contains('npm start')) {
+      await _startBuiltinDevServer(trimmed, workingDirectory);
+      return;
+    }
+
+    // Fast path: pkg commands when Termux is ready
+    if (executable == 'pkg' || executable == 'apt') {
+      if (Platform.isAndroid && termuxService != null && !termuxService!.isReady) {
+        appendLine(TerminalLine(
+          text: '\x1B[33m[Termux Required]\x1B[0m Embedded Termux runtime is not installed.\n'
+                'Tap \x1B[36m[ Install (~35MB) ]\x1B[0m at the top of the terminal to enable pkg/apt packages.',
+          isError: true,
+        ));
+        return;
+      }
+    }
+
+    // Determine platform-specific execution path
+    String execPath;
+    List<String> execArgs;
+    Map<String, String>? env;
+
+    if (Platform.isAndroid) {
+      final termux = termuxService;
+      if (termux != null && termux.isReady) {
+        // Ensure executable permissions before starting process
+        await termux.ensureBinariesExecutable();
+
+        final wrapped = termux.wrapCommandWithProot(
+          command: trimmed,
+          workingDirectory: workingDirectory,
+        );
+        execPath = wrapped.first;
+        execArgs = wrapped.sublist(1);
+        env = termux.getEnvironmentVariables(workingDirectory: workingDirectory);
+      } else {
+        // Termux not yet installed on Android
+        final systemUtils = {
+          'ls', 'cat', 'pwd', 'echo', 'mkdir', 'rm', 'rmdir', 'cp', 'mv',
+          'ps', 'id', 'date', 'chmod', 'uname', 'touch', 'grep', 'df', 'whoami'
+        };
+
+        if (systemUtils.contains(executable.toLowerCase())) {
+          execPath = '/system/bin/sh';
+          execArgs = ['-c', trimmed];
+        } else {
+          appendLine(TerminalLine(
+            text: '\x1B[33m[Termux Runtime Required]\x1B[0m The command \'\x1B[1m$executable\x1B[0m\' requires the embedded Termux environment.\n'
+                  'Tap \x1B[36m[ Install Termux Runtime ]\x1B[0m at the top of the terminal or run \x1B[32mpkg install $executable\x1B[0m once installed.',
+            isError: true,
+          ));
+          return;
+        }
+      }
+    } else {
+      // Host desktop platform (Windows, macOS, Linux)
+      if (Platform.isWindows) {
+        execPath = 'powershell.exe';
+        execArgs = ['-NoProfile', '-Command', trimmed];
+      } else {
+        execPath = '/bin/sh';
+        execArgs = ['-c', trimmed];
+      }
+    }
+
+    // Execute real process
     try {
-      final args = parts.length > 1 ? parts.sublist(1) : <String>[];
+      final effectiveDir = (workingDirectory.isNotEmpty && Directory(workingDirectory).existsSync())
+          ? workingDirectory
+          : null;
 
       final process = await Process.start(
-        executable,
-        args,
-        workingDirectory: workingDirectory,
-        runInShell: true,
+        execPath,
+        execArgs,
+        workingDirectory: effectiveDir,
+        environment: env,
+        runInShell: false,
       );
 
       _activeProcess = process;
@@ -92,6 +177,7 @@ class ProcessManager {
         startedAt: DateTime.now(),
         localPort: _detectPort(trimmed),
       );
+      notifyListeners();
 
       process.stdout.transform(utf8.decoder).listen((data) {
         for (final line in data.split('\n')) {
@@ -106,6 +192,7 @@ class ProcessManager {
                 startedAt: _activeProcessInfo!.startedAt,
                 localPort: port,
               );
+              notifyListeners();
             }
           }
         }
@@ -126,209 +213,84 @@ class ProcessManager {
         ));
         _activeProcess = null;
         _activeProcessInfo = null;
+        notifyListeners();
       });
-    } catch (_) {
-      // Fallback to Workstation Built-in Shell Engine (for Android/mobile environments)
-      await _runWorkstationShell(trimmed, workingDirectory);
+    } catch (e) {
+      // If dev server command failed, offer fallback
+      if (lowerCmd.contains('npm run dev') || lowerCmd.contains('vite') || lowerCmd.contains('serve')) {
+        await _startBuiltinDevServer(trimmed, workingDirectory);
+      } else if (e.toString().contains('Permission denied') && Platform.isAndroid) {
+        appendLine(TerminalLine(
+          text: '\x1B[31m[Permission Denied]\x1B[0m Process execution permission denied for \'$execPath\'.\n'
+                'Auto-refreshing POSIX executable permissions (chmod 0755)...',
+          isError: true,
+        ));
+        if (termuxService != null) {
+          await termuxService!.ensureBinariesExecutable();
+        }
+        appendLine(TerminalLine(
+          text: 'Executable permissions (0755) refreshed for Termux binaries.\n'
+                'Please retry the command. (Note: On Android 10+, ensure APK is built with targetSdk 28).',
+          isError: true,
+        ));
+      } else {
+        appendLine(TerminalLine(
+          text: 'Failed to execute \'$trimmed\': $e',
+          isError: true,
+        ));
+      }
     }
   }
 
-  Future<void> _runWorkstationShell(String command, String workingDirectory) async {
-    final lower = command.toLowerCase().trim();
+  Future<void> _startBuiltinDevServer(
+    String command,
+    String workingDirectory, {
+    int requestedPort = 5173,
+  }) async {
+    final pid = 3000 + Random().nextInt(4000);
+    final portToUse = command.contains('3000') ? 3000 : requestedPort;
 
-    // 1. npm run dev / vite / dev servers
-    if (lower.contains('npm run dev') || lower.contains('npm start') || lower.contains('vite') || lower.contains('serve')) {
-      final pid = 3000 + Random().nextInt(4000);
-      final requestedPort = lower.contains('3000') ? 3000 : 5173;
+    final actualPort = await _devServer.start(
+      workingDirectory: workingDirectory,
+      requestedPort: portToUse,
+    );
 
-      final actualPort = await _devServer.start(
-        workingDirectory: workingDirectory,
-        requestedPort: requestedPort,
-      );
+    _activeProcessInfo = RunningProcessInfo(
+      pid: pid,
+      command: command,
+      state: ProcessState.running,
+      startedAt: DateTime.now(),
+      localPort: actualPort,
+    );
 
-      _activeProcessInfo = RunningProcessInfo(
-        pid: pid,
-        command: command,
-        state: ProcessState.running,
-        startedAt: DateTime.now(),
-        localPort: actualPort,
-      );
+    appendLine(TerminalLine(text: '> ${workingDirectory.isNotEmpty ? p.basename(workingDirectory) : "project"}@1.0.0 dev (Nivora Loopback Server)'));
+    appendLine(TerminalLine(text: '  \x1B[32m✔\x1B[0m \x1B[1mLocalDevServer\x1B[0m ready on \x1B[36mhttp://localhost:$actualPort/\x1B[0m'));
+    appendLine(TerminalLine(text: '  \x1B[32m➜\x1B[0m Serving static assets & SPA routes from sandbox'));
+    appendLine(TerminalLine(text: '  \x1B[90mPress Stop or Ctrl+C to terminate the dev server.\x1B[0m\n'));
 
-      appendLine(TerminalLine(text: '> ${p.basename(workingDirectory)}@1.0.0 dev'));
-      appendLine(TerminalLine(text: '> vite\n'));
-      appendLine(TerminalLine(text: '  \x1B[32m✔\x1B[0m \x1B[1mVITE v5.2.11\x1B[0m  ready in \x1B[1m242\x1B[0m ms\n'));
-      appendLine(TerminalLine(text: '  \x1B[32m➜\x1B[0m  \x1B[1mLocal:\x1B[0m   http://localhost:$actualPort/'));
-      appendLine(TerminalLine(text: '  \x1B[32m➜\x1B[0m  \x1B[1mNetwork:\x1B[0m use --host to expose'));
-      appendLine(TerminalLine(text: '  \x1B[32m➜\x1B[0m  press \x1B[1mh + enter\x1B[0m to show help\n'));
-
-      // Periodic hot-reload heartbeat
-      _serverHeartbeat?.cancel();
-      _serverHeartbeat = Timer.periodic(const Duration(seconds: 15), (timer) {
-        if (_activeProcessInfo != null) {
-          appendLine(TerminalLine(text: '[\x1B[36mvite\x1B[0m] \x1B[32mhmr update\x1B[0m /src/App.tsx (hot reloaded)'));
-        } else {
-          timer.cancel();
-        }
-      });
-      return;
-    }
-
-    // 2. Python / FastAPI Uvicorn
-    if (lower.contains('uvicorn') || (lower.startsWith('python') && lower.contains('main.py'))) {
-      final pid = 4000 + Random().nextInt(4000);
-      _activeProcessInfo = RunningProcessInfo(
-        pid: pid,
-        command: command,
-        state: ProcessState.running,
-        startedAt: DateTime.now(),
-        localPort: 8000,
-      );
-
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Will watch for changes in [\x1B[36m\'$workingDirectory\'\x1B[0m]'));
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Uvicorn running on \x1B[1mhttp://127.0.0.1:8000\x1B[0m (Press CTRL+C to quit)'));
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Started reloader process [$pid] using WatchFiles'));
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Started server process [${pid + 2}]'));
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Waiting for application startup.'));
-      appendLine(TerminalLine(text: '\x1B[32mINFO\x1B[0m:     Application startup complete.'));
-      return;
-    }
-
-    // 3. git status
-    if (lower == 'git status') {
-      appendLine(TerminalLine(text: 'On branch main'));
-      appendLine(TerminalLine(text: 'Your branch is up to date with \'origin/main\'.\n'));
-      appendLine(TerminalLine(text: 'Changes not staged for commit:'));
-      appendLine(TerminalLine(text: '  (use "git add <file>..." to update what will be committed)'));
-      appendLine(TerminalLine(text: '  (use "git restore <file>..." to discard changes in working directory)'));
-      appendLine(TerminalLine(text: '\t\x1B[31mmodified:   src/components/Dashboard.tsx\x1B[0m'));
-      appendLine(TerminalLine(text: '\t\x1B[31mmodified:   README.md\x1B[0m\n'));
-      appendLine(TerminalLine(text: 'Untracked files:'));
-      appendLine(TerminalLine(text: '  (use "git add <file>..." to include in what will be committed)'));
-      appendLine(TerminalLine(text: '\t\x1B[31msrc/theme.ts\x1B[0m\n'));
-      appendLine(TerminalLine(text: 'no changes added to commit (use "git add")'));
-      return;
-    }
-
-    // 4. git diff
-    if (lower.startsWith('git diff')) {
-      appendLine(TerminalLine(text: 'diff --git a/src/components/Dashboard.tsx b/src/components/Dashboard.tsx'));
-      appendLine(TerminalLine(text: 'index 8a3f12b..9c4e231 100644'));
-      appendLine(TerminalLine(text: '--- a/src/components/Dashboard.tsx'));
-      appendLine(TerminalLine(text: '+++ b/src/components/Dashboard.tsx'));
-      appendLine(TerminalLine(text: '@@ -14,6 +14,8 @@ export function Dashboard() {'));
-      appendLine(TerminalLine(text: '\x1B[31m-  const [weather] = useState<WeatherData>({\x1B[0m'));
-      appendLine(TerminalLine(text: '\x1B[32m+  const [weather, setWeather] = useState<WeatherData>({\x1B[0m'));
-      appendLine(TerminalLine(text: '\x1B[32m+    humidity: 55,\x1B[0m'));
-      appendLine(TerminalLine(text: '     condition: \'Partly Cloudy\','));
-      appendLine(TerminalLine(text: '   });'));
-      return;
-    }
-
-    // 5. git branch
-    if (lower.startsWith('git branch')) {
-      appendLine(TerminalLine(text: '\x1B[32m* main\x1B[0m'));
-      appendLine(TerminalLine(text: '  feature/offline-workstation'));
-      return;
-    }
-
-    // 6. git log
-    if (lower.startsWith('git log')) {
-      appendLine(TerminalLine(text: '\x1B[33mcommit a7f21c9e82b3d041a91e84c20d7f5b82\x1B[0m (HEAD -> \x1B[32mmain\x1B[0m)'));
-      appendLine(TerminalLine(text: 'Author: Developer <dev@nivora.local>'));
-      appendLine(TerminalLine(text: 'Date:   Tue Sep 1 16:10:22 2026 +0530\n'));
-      appendLine(TerminalLine(text: '    feat: configure phone-first local developer workstation\n'));
-      appendLine(TerminalLine(text: '\x1B[33mcommit b3c90d1f42e5a1109a24c1f4e82b041a\x1B[0m'));
-      appendLine(TerminalLine(text: 'Author: Nivora Seeder <bot@nivora.dev>'));
-      appendLine(TerminalLine(text: 'Date:   Tue Sep 1 14:00:00 2026 +0530\n'));
-      appendLine(TerminalLine(text: '    chore: initial project repository scaffold'));
-      return;
-    }
-
-    // 7. npm test / vitest / pytest
-    if (lower.contains('test')) {
-      appendLine(TerminalLine(text: ' RUN  v1.6.0 $workingDirectory\n'));
-      appendLine(TerminalLine(text: ' \x1B[32m✓\x1B[0m src/components/Dashboard.test.tsx (2 tests) \x1B[90m14ms\x1B[0m'));
-      appendLine(TerminalLine(text: ' \x1B[32m✓\x1B[0m src/api/weather.test.ts (1 test) \x1B[90m8ms\x1B[0m\n'));
-      appendLine(TerminalLine(text: ' \x1B[1mTest Files\x1B[0m  \x1B[32m2 passed\x1B[0m (2)'));
-      appendLine(TerminalLine(text: '      \x1B[1mTests\x1B[0m  \x1B[32m3 passed\x1B[0m (3)'));
-      appendLine(TerminalLine(text: '   \x1B[1mDuration\x1B[0m  384ms\n'));
-      return;
-    }
-
-    // 8. ls / dir (Real File System Inspection)
-    if (lower == 'ls' || lower.startsWith('ls ') || lower == 'dir') {
-      final dir = Directory(workingDirectory);
-      if (await dir.exists()) {
-        final entries = await dir.list().toList();
-        for (final entry in entries) {
-          final isDir = entry is Directory;
-          final name = p.basename(entry.path);
-          if (name.startsWith('.')) continue;
-
-          if (isDir) {
-            appendLine(TerminalLine(text: '\x1B[34mdrwxr-xr-x\x1B[0m  \x1B[1m\x1B[36m$name/\x1B[0m'));
-          } else {
-            final stat = await entry.stat();
-            final sizeKb = (stat.size / 1024).toStringAsFixed(1);
-            appendLine(TerminalLine(text: '-rw-r--r--  ${sizeKb.padLeft(6)} KB  $name'));
-          }
-        }
+    _serverHeartbeat?.cancel();
+    _serverHeartbeat = Timer.periodic(const Duration(seconds: 20), (timer) {
+      if (_activeProcessInfo != null) {
+        appendLine(TerminalLine(text: '[\x1B[36mdev-server\x1B[0m] \x1B[32mhealthy\x1B[0m listening on :$actualPort'));
       } else {
-        appendLine(TerminalLine(text: 'Directory not found: $workingDirectory', isError: true));
+        timer.cancel();
       }
-      return;
-    }
+    });
+    notifyListeners();
+  }
 
-    // 9. pwd
-    if (lower == 'pwd') {
-      appendLine(TerminalLine(text: workingDirectory));
-      return;
-    }
-
-    // 10. cat <file>
-    if (lower.startsWith('cat ')) {
-      final target = command.substring(4).trim();
-      final file = File(p.join(workingDirectory, target));
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        for (final line in content.split('\n')) {
-          appendLine(TerminalLine(text: line));
-        }
-      } else {
-        appendLine(TerminalLine(text: 'cat: $target: No such file', isError: true));
-      }
-      return;
-    }
-
-    // 11. git add / git commit
-    if (lower.startsWith('git add')) {
-      appendLine(TerminalLine(text: '[main] Staged changes for commit.'));
-      return;
-    }
-    if (lower.startsWith('git commit')) {
-      appendLine(TerminalLine(text: '[main a7f21c9] Commit created successfully.'));
-      appendLine(TerminalLine(text: ' 2 files changed, 14 insertions(+), 2 deletions(-)'));
-      return;
-    }
-
-    // 12. help
-    if (lower == 'help') {
-      appendLine(TerminalLine(text: 'Nivora Mobile Workstation Built-in Commands:'));
-      appendLine(TerminalLine(text: '  npm run dev          - Launch local Vite development server'));
-      appendLine(TerminalLine(text: '  npm test             - Run unit & component test suite'));
-      appendLine(TerminalLine(text: '  git status           - Show working tree status'));
-      appendLine(TerminalLine(text: '  git diff             - Show unified code diffs'));
-      appendLine(TerminalLine(text: '  git log              - View commit history'));
-      appendLine(TerminalLine(text: '  git branch           - List repository branches'));
-      appendLine(TerminalLine(text: '  ls / dir             - List project files on disk'));
-      appendLine(TerminalLine(text: '  pwd                  - Print working directory'));
-      appendLine(TerminalLine(text: '  cat <file>           - Display file content'));
-      appendLine(TerminalLine(text: '  clear                - Clear terminal output'));
-      return;
-    }
-
-    // Fallback unrecognized
-    appendLine(TerminalLine(text: 'zsh: command executed: $command'));
+  void _printHelp() {
+    appendLine(TerminalLine(text: '\x1B[1mNivora Terminal & Termux Package Commands:\x1B[0m'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg install <pkg>\x1B[0m   - Install Termux package (e.g. nodejs, python, git, rust)'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg update\x1B[0m          - Update package repositories'));
+    appendLine(TerminalLine(text: '  \x1B[36mpkg list-all\x1B[0m        - List available packages'));
+    appendLine(TerminalLine(text: '  \x1B[36mnpm run dev\x1B[0m         - Start local development server on port 5173'));
+    appendLine(TerminalLine(text: '  \x1B[36mgit status\x1B[0m          - Show modified/staged repository files'));
+    appendLine(TerminalLine(text: '  \x1B[36mgit diff\x1B[0m            - Show unified code diffs'));
+    appendLine(TerminalLine(text: '  \x1B[36mls -la / dir\x1B[0m        - List files in current directory'));
+    appendLine(TerminalLine(text: '  \x1B[36mpwd\x1B[0m                 - Print working directory'));
+    appendLine(TerminalLine(text: '  \x1B[36mclear\x1B[0m               - Clear terminal scrollback'));
+    appendLine(TerminalLine(text: '  \x1B[31mCtrl+C\x1B[0m              - Terminate active running process'));
   }
 
   void sendInput(String input) {
@@ -356,6 +318,7 @@ class ProcessManager {
       appendLine(TerminalLine(text: '^C\n[Process terminated by user]'));
       _activeProcessInfo = null;
     }
+    notifyListeners();
   }
 
   int? _detectPort(String command) {
@@ -373,5 +336,13 @@ class ProcessManager {
       return int.tryParse(match.group(1)!);
     }
     return null;
+  }
+
+  @override
+  void dispose() {
+    _serverHeartbeat?.cancel();
+    _devServer.stop();
+    _outputController.close();
+    super.dispose();
   }
 }

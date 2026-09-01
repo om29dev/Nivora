@@ -177,48 +177,52 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
             ),
           ),
           // Virtual developer keyboard accessory bar
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardTheme.color ?? AppColors.surface(context),
-              border: Border(
-                top: BorderSide(
-                  color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+          SafeArea(
+            top: false,
+            bottom: true,
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardTheme.color ?? AppColors.surface(context),
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+                  ),
                 ),
               ),
-            ),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              itemCount: _keyboardShortcuts.length,
-              itemBuilder: (ctx, idx) {
-                final keyText = _keyboardShortcuts[idx];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: InkWell(
-                    onTap: () => _insertText(keyText),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceElevated(context),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                itemCount: _keyboardShortcuts.length,
+                itemBuilder: (ctx, idx) {
+                  final keyText = _keyboardShortcuts[idx];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: InkWell(
+                      onTap: () => _insertText(keyText),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated(context),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Theme.of(context).dividerTheme.color ?? AppColors.border(context),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        keyText,
-                        style: AppTypography.code.copyWith(
-                          color: AppColors.text(context),
-                          fontWeight: FontWeight.w600,
+                        child: Text(
+                          keyText,
+                          style: AppTypography.code.copyWith(
+                            color: AppColors.text(context),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],

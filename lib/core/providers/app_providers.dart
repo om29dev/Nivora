@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import '../services/mock_demo_seeder.dart';
 import '../services/runtime_manager.dart';
 import '../services/storage_service.dart';
+import '../services/termux_environment_service.dart';
 
 // --- Theme Mode State ---
 final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
@@ -40,14 +41,32 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
 }
 
 // --- Singleton Service Providers ---
+final termuxEnvironmentServiceProvider = Provider<TermuxEnvironmentService>((ref) {
+  final service = TermuxEnvironmentService();
+  service.initialize();
+  ref.onDispose(() => service.dispose());
+  return service;
+});
+
+final termuxStatusStreamProvider = StreamProvider<TermuxEnvironmentStatus>((ref) {
+  final service = ref.watch(termuxEnvironmentServiceProvider);
+  return service.statusStream;
+});
+
 final storageServiceProvider = Provider<StorageService>((ref) => StorageService());
 final mockDemoSeederProvider = Provider<MockDemoSeeder>((ref) {
   final storage = ref.watch(storageServiceProvider);
   return MockDemoSeeder(storage);
 });
 final gitServiceProvider = Provider<GitService>((ref) => GitService());
-final runtimeManagerProvider = Provider<RuntimeManager>((ref) => RuntimeManager());
-final processManagerProvider = Provider<ProcessManager>((ref) => ProcessManager());
+final runtimeManagerProvider = Provider<RuntimeManager>((ref) {
+  final termux = ref.watch(termuxEnvironmentServiceProvider);
+  return RuntimeManager(termuxService: termux);
+});
+final processManagerProvider = ChangeNotifierProvider<ProcessManager>((ref) {
+  final termux = ref.watch(termuxEnvironmentServiceProvider);
+  return ProcessManager(termuxService: termux);
+});
 final officeKitServiceProvider = Provider<OfficeKitService>((ref) => OfficeKitService());
 
 final repositoryScannerProvider = Provider<RepositoryScanner>((ref) => RepositoryScanner());
