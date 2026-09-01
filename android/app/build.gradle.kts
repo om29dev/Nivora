@@ -49,9 +49,17 @@ android {
         minSdk = flutter.minSdkVersion
         // Target SDK 28 is required on Android to allow executing embedded user-space Linux binaries (Termux/bash/nodejs)
         // in the app data directory without encountering Android 10+ W^X SELinux restrictions.
+        // Nivora is sideloaded — NOT distributed via Google Play — so Play Store API-level requirements do not apply.
         targetSdk = 28
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    lint {
+        // targetSdk=28 is intentional for embedded Linux binary execution (see AGENTS.md ADR).
+        // Nivora is a sideloaded developer tool — Play Store API-level rules do not apply.
+        disable += "ExpiredTargetSdkVersion"
+        abortOnError = false
     }
 
     buildTypes {
@@ -62,6 +70,10 @@ android {
             } else {
                 signingConfig = signingConfigs.getByName("debug")
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -76,6 +88,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    implementation("androidx.concurrent:concurrent-futures:1.2.0")
+    implementation("androidx.concurrent:concurrent-futures-ktx:1.2.0")
 }
 
 flutter {

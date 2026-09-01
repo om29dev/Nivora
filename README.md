@@ -1,7 +1,16 @@
 # Nivora ⚡
 > **AI-Native Mobile Development Workstation for Android**
 
-Nivora turns your Android smartphone into a full-fledged local development environment. Clone, inspect, vibe-code, run, debug, test, and commit real GitHub repositories directly on your phone — without remote cloud servers, sluggish remote desktop sessions, or squished desktop IDE windows.
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Android](https://img.shields.io/badge/Android-SDK_28+-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
+[![Riverpod](https://img.shields.io/badge/State-Riverpod-00D2B4?style=for-the-badge)](https://riverpod.dev)
+[![On--Device AI](https://img.shields.io/badge/AI-On--Device_SLMs_%2B_Cloud-FF6F00?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev)
+[![Nix](https://img.shields.io/badge/Nix-Flakes_Ready-5277C3?style=for-the-badge&logo=nixos&logoColor=white)](https://nixos.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)](LICENSE)
+
+`#flutter` `#android` `#mobile-ide` `#on-device-ai` `#git` `#developer-tools` `#termux` `#gemini` `#slm` `#qwen` `#smollm` `#llama` `#offline-first` `#code-editor` `#live-preview`
 
 ---
 
@@ -97,8 +106,3 @@ All detailed subsystem guides and architectural specifications are organized in 
 | **Product** | [**TODO.md**](file:///d:/proj/Nivora/docs/TODO.md) | Project milestones and completed deliverables checklist |
 
 Explore the full documentation hub at [**docs/README.md**](file:///d:/proj/Nivora/docs/README.md).
-
----
-
-## 📄 License
-Licensed under the Apache License, Version 2.0.

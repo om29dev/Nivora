@@ -46,3 +46,8 @@ app.*.map.json
 
 # Ignore local gradle zip download
 gradle.zip
+
+# Android signing secrets — never commit these
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
