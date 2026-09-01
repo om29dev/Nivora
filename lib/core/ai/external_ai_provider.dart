@@ -69,4 +69,17 @@ class ExternalAIProvider implements AIProvider {
       diffs: [],
     );
   }
+
+  @override
+  Future<String> generateConversationalResponse({
+    required String prompt,
+    ProjectContext? context,
+    List<Map<String, String>> conversationHistory = const [],
+  }) async {
+    if (apiKey.isEmpty) {
+      return 'External AI API key is not configured. Please add an API key in Settings or switch to the on-device Local Nano-LLM.';
+    }
+    return 'Cloud AI response for: "$prompt" (Target context: ${context?.files.length ?? 0} files).';
+  }
 }
+

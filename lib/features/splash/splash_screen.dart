@@ -68,28 +68,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 76,
-                  height: 76,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [AppColors.electricCyan, AppColors.violetAccent],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    borderRadius: BorderRadius.circular(22),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.electricCyan.withAlpha(80),
-                        blurRadius: 24,
+                        color: AppColors.electricCyan.withAlpha(100),
+                        blurRadius: 30,
                         spreadRadius: 2,
+                      ),
+                      BoxShadow(
+                        color: AppColors.violetAccent.withAlpha(60),
+                        blurRadius: 45,
+                        spreadRadius: 4,
                       ),
                     ],
                   ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.terminal_rounded,
-                      color: Colors.white,
-                      size: 38,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset(
+                      'logo.png',
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),

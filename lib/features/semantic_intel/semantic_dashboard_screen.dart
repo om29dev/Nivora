@@ -100,9 +100,10 @@ class _SemanticDashboardScreenState
             ),
           ),
 
-          // Main content
+          // Main content with padding for bottom status bar
           if (hasResult)
             Positioned.fill(
+              bottom: 60,
               child: BlastRadiusCanvas(data: inferenceState.result!),
             )
           else
@@ -111,6 +112,17 @@ class _SemanticDashboardScreenState
               progress: inferenceState.progress,
               statusMessage: inferenceState.statusMessage,
             ),
+
+          // Floating Action Button in top-right or overlay
+          Positioned(
+            top: 16,
+            right: 16,
+            child: _NpuAnalysisFab(
+              glowAnim: _fabGlowAnim,
+              isRunning: isRunning,
+              onPressed: _runNpuAnalysis,
+            ),
+          ),
 
           // Bottom info bar with status chips
           if (hasResult)
@@ -124,11 +136,6 @@ class _SemanticDashboardScreenState
               ),
             ),
         ],
-      ),
-      floatingActionButton: _NpuAnalysisFab(
-        glowAnim: _fabGlowAnim,
-        isRunning: isRunning,
-        onPressed: _runNpuAnalysis,
       ),
     );
   }

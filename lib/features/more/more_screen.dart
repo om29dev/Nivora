@@ -72,6 +72,14 @@ class MoreScreen extends ConsumerWidget {
             child: Column(
               children: [
                 _ToolTile(
+                  icon: Icons.folder_copy_rounded,
+                  iconColor: AppColors.electricCyan,
+                  title: 'All Repositories',
+                  subtitle: 'Explore, manage, and clone local sandboxes',
+                  onTap: () => context.push('/projects'),
+                ),
+                const Divider(height: 1),
+                _ToolTile(
                   icon: Icons.play_arrow_rounded,
                   iconColor: AppColors.emeraldGreen,
                   title: 'Runner & Live Preview',

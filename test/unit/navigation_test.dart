@@ -32,21 +32,21 @@ void main() {
 
       // Verify all 4 tab labels exist
       expect(find.text('Dashboard'), findsOneWidget);
-      expect(find.text('Projects'), findsOneWidget);
       expect(find.text('Terminal'), findsOneWidget);
+      expect(find.text('Intel'), findsOneWidget);
       expect(find.text('More'), findsOneWidget);
 
       // Verify AI button exists
       expect(find.byType(NivoraFloatingAIButton), findsOneWidget);
       expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
 
-      // Test tapping tab 1 (Projects)
-      await tester.tap(find.text('Projects'));
+      // Test tapping tab 1 (Terminal)
+      await tester.tap(find.text('Terminal'));
       await tester.pump();
       expect(selectedIndex, equals(1));
 
-      // Test tapping tab 2 (Terminal)
-      await tester.tap(find.text('Terminal'));
+      // Test tapping tab 2 (Intel)
+      await tester.tap(find.text('Intel'));
       await tester.pump();
       expect(selectedIndex, equals(2));
 

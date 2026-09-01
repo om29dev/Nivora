@@ -1,11 +1,11 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_typography.dart';
 import 'nivora_floating_ai_button.dart';
 
 /// Sticked edge-to-edge developer workstation bottom navigation bar for Nivora.
-/// Renders a docked bar with 4 destinations and the center AI Agent action button
-/// fitted completely inside, fully respecting Android system navigation insets.
+/// Renders 5 items: Dashboard, Terminal, AI (center), Intel, and More.
 class NivoraBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onItemSelected;
@@ -18,77 +18,77 @@ class NivoraBottomNavBar extends StatelessWidget {
     required this.onAITapped,
   });
 
-  static const double barContentHeight = 60.0;
+  static const double barContentHeight = 62.0;
 
   @override
   Widget build(BuildContext context) {
     final isDark = AppColors.isDark(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        border: Border(
-          top: BorderSide(
-            color: AppColors.border(context),
-            width: 1.0,
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: (isDark ? const Color(0xFF0C1220) : Colors.white).withAlpha(210),
+            border: Border(
+              top: BorderSide(
+                color: (isDark ? Colors.white : Colors.black).withAlpha(16),
+                width: 1.0,
+              ),
+            ),
           ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        bottom: true,
-        child: SizedBox(
-          height: barContentHeight,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Left Tab 0: Dashboard
-              _NavItem(
-                label: 'Dashboard',
-                icon: Icons.dashboard_rounded,
-                isSelected: currentIndex == 0,
-                onTap: () => onItemSelected(0),
-              ),
+          child: SafeArea(
+            top: false,
+            bottom: true,
+            child: SizedBox(
+              height: barContentHeight,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Tab 0: Dashboard
+                  _NavItem(
+                    label: 'Dashboard',
+                    icon: Icons.dashboard_rounded,
+                    isSelected: currentIndex == 0,
+                    onTap: () => onItemSelected(0),
+                  ),
 
-              // Left Tab 1: Projects
-              _NavItem(
-                label: 'Projects',
-                icon: Icons.folder_copy_rounded,
-                isSelected: currentIndex == 1,
-                onTap: () => onItemSelected(1),
-              ),
+                  // Tab 1: Terminal
+                  _NavItem(
+                    label: 'Terminal',
+                    icon: Icons.terminal_rounded,
+                    isSelected: currentIndex == 1,
+                    onTap: () => onItemSelected(1),
+                  ),
 
-              // Center AI Button - completely fitted inside the bottom nav bar
-              NivoraFloatingAIButton(
-                size: 42.0,
-                onTap: onAITapped,
-              ),
+                  // Center Tab: AI Agent
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: NivoraFloatingAIButton(
+                      size: 42.0,
+                      onTap: onAITapped,
+                    ),
+                  ),
 
-              // Right Tab 2: Terminal
-              _NavItem(
-                label: 'Terminal',
-                icon: Icons.terminal_rounded,
-                isSelected: currentIndex == 2,
-                onTap: () => onItemSelected(2),
-              ),
+                  // Tab 2: Semantic Intel
+                  _NavItem(
+                    label: 'Intel',
+                    icon: Icons.hub_rounded,
+                    isSelected: currentIndex == 2,
+                    onTap: () => onItemSelected(2),
+                  ),
 
-              // Right Tab 3: Semantic Intel
-              _NavItem(
-                label: 'Intel',
-                icon: Icons.hub_rounded,
-                isSelected: currentIndex == 3,
-                onTap: () => onItemSelected(3),
+                  // Tab 3: More
+                  _NavItem(
+                    label: 'More',
+                    icon: Icons.more_horiz_rounded,
+                    isSelected: currentIndex == 3,
+                    onTap: () => onItemSelected(3),
+                  ),
+                ],
               ),
-
-              // Right Tab 4: More
-              _NavItem(
-                label: 'More',
-                icon: Icons.more_horiz_rounded,
-                isSelected: currentIndex == 4,
-                onTap: () => onItemSelected(4),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -126,8 +126,8 @@ class _NavItem extends StatelessWidget {
           splashColor: AppColors.electricCyan.withAlpha(25),
           highlightColor: Colors.transparent,
           child: Container(
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            constraints: const BoxConstraints(minWidth: 54, minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -139,21 +139,21 @@ class _NavItem extends StatelessWidget {
                     color: isSelected
                         ? activeColor.withAlpha(28)
                         : Colors.transparent,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,
-                    size: 20,
                     color: isSelected ? activeColor : inactiveColor,
+                    size: 20,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   label,
                   style: AppTypography.captionOf(context).copyWith(
-                    fontSize: 10,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     color: isSelected ? activeColor : inactiveColor,
+                    fontSize: 10,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   ),
                 ),
               ],

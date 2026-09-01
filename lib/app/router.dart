@@ -61,17 +61,7 @@ final appRouter = GoRouter(
           ],
         ),
 
-        // Tab 1: Projects (Repository Explorer)
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/projects',
-              builder: (context, state) => const ProjectsScreen(),
-            ),
-          ],
-        ),
-
-        // Tab 2: Terminal (Global Workstation Console)
+        // Tab 1: Terminal (Global Workstation Console)
         StatefulShellBranch(
           routes: [
             GoRoute(
@@ -81,7 +71,7 @@ final appRouter = GoRouter(
           ],
         ),
 
-        // Tab 3: Semantic Intel (Blast Radius Analyzer)
+        // Tab 2: Semantic Intel (Blast Radius Analyzer)
         StatefulShellBranch(
           routes: [
             GoRoute(
@@ -91,7 +81,7 @@ final appRouter = GoRouter(
           ],
         ),
 
-        // Tab 4: More (Secondary Tools & Settings Hub)
+        // Tab 3: More (Secondary Tools & Settings Hub)
         StatefulShellBranch(
           routes: [
             GoRoute(
@@ -101,6 +91,12 @@ final appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+
+    // Projects list route
+    GoRoute(
+      path: '/projects',
+      builder: (context, state) => const ProjectsScreen(),
     ),
 
     // Project Workspace Deep Routes

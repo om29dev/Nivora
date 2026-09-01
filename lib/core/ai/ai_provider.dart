@@ -13,4 +13,11 @@ abstract class AIProvider {
     required ToolRegistry tools,
     required void Function(AgentStep step) onStep,
   });
+
+  Future<String> generateConversationalResponse({
+    required String prompt,
+    ProjectContext? context,
+    List<Map<String, String>> conversationHistory = const [],
+  });
 }
+

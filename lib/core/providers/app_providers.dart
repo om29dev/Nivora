@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import '../ai/ai_config.dart';
 import '../ai/ai_provider.dart';
-import '../ai/local_ai_provider.dart';
+import '../ai/local_nano_llm.dart';
 import '../ai/patch_engine.dart';
+import '../ai/real_ai_provider.dart';
 import '../intelligence/context_retriever.dart';
 import '../intelligence/markdown_analyzer.dart';
 import '../intelligence/project_detector.dart';
@@ -76,8 +78,40 @@ final symbolIndexerProvider = Provider<SymbolIndexer>((ref) => SymbolIndexer());
 final contextRetrieverProvider = Provider<ContextRetriever>((ref) => ContextRetriever());
 final patchEngineProvider = Provider<PatchEngine>((ref) => PatchEngine());
 
-// --- Active AI Provider ---
-final selectedAIProvider = StateProvider<AIProvider>((ref) => LocalAIProvider());
+// --- Active AI Provider & Persistent Configuration ---
+final aiConfigProvider = StateNotifierProvider<AIConfigNotifier, AIConfig>((ref) {
+  final storage = ref.watch(storageServiceProvider);
+  return AIConfigNotifier(storage);
+});
+
+class AIConfigNotifier extends StateNotifier<AIConfig> {
+  final StorageService _storage;
+
+  AIConfigNotifier(this._storage) : super(AIConfig.defaultConfig()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final raw = await _storage.getSavedAIConfigJson();
+    if (raw != null && raw.isNotEmpty) {
+      state = AIConfig.deserialize(raw);
+    }
+  }
+
+  Future<void> updateConfig(AIConfig newConfig) async {
+    state = newConfig;
+    await _storage.saveAIConfigJson(newConfig.serialize());
+  }
+}
+
+final nanoModelProfileProvider = StateProvider<NanoModelProfile>((ref) {
+  return NanoModelProfile.availableProfiles.first;
+});
+
+final selectedAIProvider = Provider<AIProvider>((ref) {
+  final config = ref.watch(aiConfigProvider);
+  return RealAIProvider(config: config);
+});
 
 // --- Onboarding State ---
 final onboardingCompletedProvider = StateNotifierProvider<OnboardingNotifier, AsyncValue<bool>>((ref) {

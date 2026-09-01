@@ -1,4 +1,5 @@
 /// Data models for the Semantic Intel blast radius visualization.
+library;
 
 enum DependencyDegree { target, firstDegree, secondDegree }
 

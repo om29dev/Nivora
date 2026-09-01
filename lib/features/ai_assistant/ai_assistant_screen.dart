@@ -260,6 +260,15 @@ class _AIAssistantScreenState extends ConsumerState<AIAssistantScreen> {
         });
       });
       _scrollToBottom();
+
+      // Disappear agent execution pipeline after 2 seconds
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _currentSteps.clear();
+          });
+        }
+      });
     } catch (e) {
       setState(() {
         _isBusy = false;
@@ -269,6 +278,15 @@ class _AIAssistantScreenState extends ConsumerState<AIAssistantScreen> {
         });
       });
       _scrollToBottom();
+
+      // Disappear agent execution pipeline after 2 seconds
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _currentSteps.clear();
+          });
+        }
+      });
     }
   }
 
@@ -426,11 +444,24 @@ class _AIAssistantScreenState extends ConsumerState<AIAssistantScreen> {
             }
           },
         ),
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.auto_awesome, size: 18, color: AppColors.electricCyan),
-            const SizedBox(width: 8),
-            Text('Nivora Agent', style: AppTypography.h3Of(context)),
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome, size: 16, color: AppColors.electricCyan),
+                const SizedBox(width: 6),
+                Text('Nivora Agent', style: AppTypography.h3Of(context)),
+              ],
+            ),
+            Text(
+              ref.watch(selectedAIProvider).name,
+              style: AppTypography.captionOf(context).copyWith(
+                fontSize: 10,
+                color: AppColors.textMutedOf(context),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
         actions: [

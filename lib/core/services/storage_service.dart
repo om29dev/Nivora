@@ -93,4 +93,25 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConfig.prefOnboardingCompleted, completed);
   }
+
+  Future<String?> getSavedAIConfigJson() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('ai_engine_config_json');
+  }
+
+  Future<void> saveAIConfigJson(String configJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ai_engine_config_json', configJson);
+  }
+
+  Future<String?> getProviderApiKey(String providerId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('ai_api_key_$providerId');
+  }
+
+  Future<void> saveProviderApiKey(String providerId, String apiKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ai_api_key_$providerId', apiKey);
+  }
 }
+

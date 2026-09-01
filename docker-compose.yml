@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  nivora-workstation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nivora-dev-workstation
+    ports:
+      - "5173:5173"   # Nivora In-App Dev Server & Live Preview
+      - "8080:8080"   # Local llama-server / Nano-LLM Daemon
+      - "11434:11434" # Ollama API Daemon
+    volumes:
+      - .:/workspace/Nivora
+      - nivora-cache:/root/.pub-cache
+      - gradle-cache:/root/.gradle
+    environment:
+      - FLUTTER_TEST=true
+      - NIVORA_DEV_MODE=true
+    stdin_open: true
+    tty: true
+
+  ollama-inference:
+    image: ollama/ollama:latest
+    container_name: nivora-ollama-engine
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  nivora-cache:
+  gradle-cache:
+  ollama-models:

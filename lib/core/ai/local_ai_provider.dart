@@ -114,4 +114,15 @@ class LocalAIProvider implements AIProvider {
 
     return '$original\n\n// Nivora AI Patch: $prompt\n';
   }
+
+  @override
+  Future<String> generateConversationalResponse({
+    required String prompt,
+    ProjectContext? context,
+    List<Map<String, String>> conversationHistory = const [],
+  }) async {
+    final stack = context?.summary.techStack.join(', ') ?? 'General';
+    return 'Nivora Local Engine: Analyzed "$prompt" against stack [$stack]. Ready for code inspection or diff proposals.';
+  }
 }
+
